@@ -1,23 +1,48 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <title>Farmers Market Price Prediction</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 
-<h2>Farmers Market Price Prediction</h2>
+<div class="page-wrapper">
+  <div class="container">
 
-<select id="state"></select><br><br>
-<select id="district"></select><br><br>
-<select id="market"></select><br><br>
-<select id="commodity"></select><br><br>
+    <h1>🌾 Farmers Market Price Prediction</h1>
+    <p class="subtitle">
+      AI-based system to help farmers decide the right time to sell crops
+    </p>
 
-<input type="date" id="priceDate"><br><br>
+    <div class="form-section">
 
-<button onclick="predictPrice()">Predict</button>
+      <label>State</label>
+      <select id="state"></select>
 
-<div id="result"></div>
+      <label>District</label>
+      <select id="district"></select>
+
+      <label>Market</label>
+      <select id="market"></select>
+
+      <label>Commodity</label>
+      <select id="commodity"></select>
+
+      <label>Date</label>
+      <input type="date" id="priceDate">
+
+      <button onclick="predictPrice()">Predict Price</button>
+
+    </div>
+
+    <!-- Result Section -->
+    <div class="result-section" id="result">
+      <!-- JS fills content -->
+    </div>
+
+  </div>
+</div>
 
 <script src="/static/script.js"></script>
 </body>
