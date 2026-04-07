@@ -13,16 +13,21 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 # =========================
-# LAZY LOAD FUNCTION (KEY FIX)
+# LOAD ONLY ENCODERS (LIGHTWEIGHT)
 # =========================
-def load_models():
+def load_encoders():
+    return joblib.load(os.path.join(BASE_DIR, "../model/label_encoders.pkl"))
+
+
+# =========================
+# LOAD FULL MODEL (HEAVY)
+# =========================
+def load_model_bundle():
     model = joblib.load(os.path.join(BASE_DIR, "../model/rf_price_model1.pkl"))
     feature_schema = joblib.load(os.path.join(BASE_DIR, "../model/feature_schema.pkl"))
-    label_encoders = joblib.load(os.path.join(BASE_DIR, "../model/label_encoders.pkl"))
     alpha = joblib.load(os.path.join(BASE_DIR, "../model/alpha.pkl"))
     beta = joblib.load(os.path.join(BASE_DIR, "../model/beta.pkl"))
-
-    return model, feature_schema, label_encoders, alpha, beta
+    return model, feature_schema, alpha, beta
 
 
 # =========================
@@ -39,28 +44,44 @@ def ui():
     return app.send_static_file("index.html")
 
 
+# =========================
+# DROPDOWN APIs (FAST)
+# =========================
+
 @app.route("/states")
 def states():
-    _, _, label_encoders, _, _ = load_models()
-    return jsonify(label_encoders["STATE"].classes_.tolist())
+    try:
+        label_encoders = load_encoders()
+        return jsonify(label_encoders["STATE"].classes_.tolist())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/districts")
 def districts():
-    _, _, label_encoders, _, _ = load_models()
-    return jsonify(label_encoders["District Name"].classes_.tolist())
+    try:
+        label_encoders = load_encoders()
+        return jsonify(label_encoders["District Name"].classes_.tolist())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/markets")
 def markets():
-    _, _, label_encoders, _, _ = load_models()
-    return jsonify(label_encoders["Market Name"].classes_.tolist())
+    try:
+        label_encoders = load_encoders()
+        return jsonify(label_encoders["Market Name"].classes_.tolist())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/commodities")
 def commodities():
-    _, _, label_encoders, _, _ = load_models()
-    return jsonify(label_encoders["Commodity"].classes_.tolist())
+    try:
+        label_encoders = load_encoders()
+        return jsonify(label_encoders["Commodity"].classes_.tolist())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # =========================
@@ -69,8 +90,9 @@ def commodities():
 @app.route("/predict", methods=["POST"])
 def predict():
     try:
-        # Load models only when needed
-        model, feature_schema, label_encoders, alpha, beta = load_models()
+        # Load heavy models only when needed
+        model, feature_schema, alpha, beta = load_model_bundle()
+        label_encoders = load_encoders()
 
         data = request.json
 
@@ -79,11 +101,11 @@ def predict():
         data["day"], data["month"], data["year"] = d.day, d.month, d.year
         del data["Price Date"]
 
-        # Encoding
+        # Encode categorical values
         for col, enc in label_encoders.items():
             data[col] = int(enc.transform([data[col]])[0])
 
-        # DataFrame creation
+        # Prepare input
         X = pd.DataFrame([data])[feature_schema]
 
         # Prediction
