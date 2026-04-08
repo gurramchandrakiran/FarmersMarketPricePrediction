@@ -90,34 +90,75 @@ def commodities():
 @app.route("/predict", methods=["POST"])
 def predict():
     try:
-        # Load heavy models only when needed
+        # Load models
         model, feature_schema, alpha, beta = load_model_bundle()
         label_encoders = load_encoders()
 
         data = request.json
+        print("Received JSON:", data)
 
-        # Date processing
-        d = datetime.strptime(data["Price Date"], "%Y-%m-%d")
-        data["day"], data["month"], data["year"] = d.day, d.month, d.year
+        # =========================
+        # DATE HANDLING (ROBUST)
+        # =========================
+        date_str = data.get("Price Date")
+
+        if not date_str:
+            return jsonify({"error": "Price Date is required"}), 400
+
+        parsed = None
+        for fmt in ("%Y-%m-%d", "%d-%m-%Y"):
+            try:
+                parsed = datetime.strptime(date_str, fmt)
+                break
+            except:
+                continue
+
+        if parsed is None:
+            return jsonify({"error": "Invalid date format. Use YYYY-MM-DD or DD-MM-YYYY"}), 400
+
+        data["day"], data["month"], data["year"] = parsed.day, parsed.month, parsed.year
         del data["Price Date"]
 
-        # Encode categorical values
+        # =========================
+        # SAFE ENCODING
+        # =========================
         for col, enc in label_encoders.items():
-            data[col] = int(enc.transform([data[col]])[0])
+            value = str(data.get(col, "")).strip()
 
-        # Prepare input
-        X = pd.DataFrame([data])[feature_schema]
+            if value in enc.classes_:
+                data[col] = int(enc.transform([value])[0])
+            else:
+                return jsonify({
+                    "error": f"Invalid value '{value}' for column '{col}'"
+                }), 400
 
-        # Prediction
+        print("Encoded data:", data)
+
+        # =========================
+        # FEATURE ALIGNMENT
+        # =========================
+        X = pd.DataFrame([data])
+
+        # Ensure correct column order
+        X = X.reindex(columns=feature_schema, fill_value=0)
+
+        # =========================
+        # PREDICTION
+        # =========================
         modal = float(model.predict(X)[0])
 
-        return jsonify({
+        result = {
             "Predicted_Modal_Price": round(modal, 2),
             "Estimated_Min_Price": round(modal * alpha, 2),
             "Estimated_Max_Price": round(modal * beta, 2)
-        })
+        }
+
+        print("Prediction result:", result)
+
+        return jsonify(result)
 
     except Exception as e:
+        print("ERROR in /predict:", str(e))
         return jsonify({"error": str(e)}), 500
 
 
