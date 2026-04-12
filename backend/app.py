@@ -12,18 +12,17 @@ app = Flask(__name__, static_folder="static", static_url_path="/static")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # =========================
-# LOAD MODELS
+# LOAD MODELS ONCE (MEMORY FIX)
 # =========================
-def load_encoders():
-    return joblib.load(os.path.join(BASE_DIR, "../model/label_encoders.pkl"))
+print("Loading models...")
 
-def load_model_bundle():
-    model = joblib.load(os.path.join(BASE_DIR, "../model/rf_price_model1.pkl"))
-    feature_schema = joblib.load(os.path.join(BASE_DIR, "../model/feature_schema.pkl"))
-    alpha = joblib.load(os.path.join(BASE_DIR, "../model/alpha.pkl"))
-    beta = joblib.load(os.path.join(BASE_DIR, "../model/beta.pkl"))
-    return model, feature_schema, alpha, beta
+model = joblib.load(os.path.join(BASE_DIR, "../model/rf_price_model1.pkl"))
+feature_schema = joblib.load(os.path.join(BASE_DIR, "../model/feature_schema.pkl"))
+label_encoders = joblib.load(os.path.join(BASE_DIR, "../model/label_encoders.pkl"))
+alpha = joblib.load(os.path.join(BASE_DIR, "../model/alpha.pkl"))
+beta = joblib.load(os.path.join(BASE_DIR, "../model/beta.pkl"))
 
+print("Models loaded successfully!")
 
 # =========================
 # ROUTES
@@ -45,49 +44,42 @@ def ui():
 
 @app.route("/states")
 def states():
-    label_encoders = load_encoders()
     return jsonify(label_encoders["STATE"].classes_.tolist())
 
 
 @app.route("/districts")
 def districts():
-    label_encoders = load_encoders()
     return jsonify(label_encoders["District Name"].classes_.tolist())
 
 
 @app.route("/markets")
 def markets():
-    label_encoders = load_encoders()
     return jsonify(label_encoders["Market Name"].classes_.tolist())
 
 
 @app.route("/commodities")
 def commodities():
-    label_encoders = load_encoders()
     return jsonify(label_encoders["Commodity"].classes_.tolist())
 
 
 # =========================
-# PREDICT API (FINAL STABLE)
+# PREDICT API
 # =========================
 @app.route("/predict", methods=["POST"])
 def predict():
     try:
-        model, feature_schema, alpha, beta = load_model_bundle()
-        label_encoders = load_encoders()
-
         data = request.json
         print("Incoming:", data)
 
         # =========================
-        # DATE
+        # DATE HANDLING
         # =========================
         d = datetime.strptime(data["Price Date"], "%Y-%m-%d")
         data["day"], data["month"], data["year"] = d.day, d.month, d.year
         del data["Price Date"]
 
         # =========================
-        # ADD DEFAULTS (IMPORTANT)
+        # ADD DEFAULT VALUES
         # =========================
         data["Variety"] = "Other"
         data["Grade"] = "FAQ"
@@ -104,11 +96,11 @@ def predict():
             data[col] = int(enc.transform([value])[0])
 
         # =========================
-        # DATAFRAME ALIGNMENT
+        # DATAFRAME PREPARATION
         # =========================
         X = pd.DataFrame([data])
 
-        # Fill missing columns
+        # Ensure all columns exist
         for col in feature_schema:
             if col not in X.columns:
                 X[col] = 0
@@ -117,7 +109,7 @@ def predict():
         X = X[feature_schema]
 
         # =========================
-        # PREDICT
+        # PREDICTION
         # =========================
         modal = float(model.predict(X)[0])
 
