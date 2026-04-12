@@ -1,9 +1,9 @@
 // ===============================
 // Farmers Market Price Prediction
-// Frontend Script (FINAL VERSION)
+// FINAL STABLE VERSION
 // ===============================
 
-// Load dropdowns when page loads
+// Load dropdowns on page load
 window.onload = () => {
   loadDropdown("/states", "state", "Select State");
   loadDropdown("/districts", "district", "Select District");
@@ -11,7 +11,9 @@ window.onload = () => {
   loadDropdown("/commodities", "commodity", "Select Commodity");
 };
 
-// Generic dropdown loader
+// ===============================
+// LOAD DROPDOWNS
+// ===============================
 function loadDropdown(url, elementId, placeholder) {
   fetch(url)
     .then(response => response.json())
@@ -32,7 +34,7 @@ function loadDropdown(url, elementId, placeholder) {
 }
 
 // ===============================
-// Predict Price Function
+// PREDICT FUNCTION
 // ===============================
 function predictPrice() {
   const state = document.getElementById("state").value;
@@ -41,29 +43,36 @@ function predictPrice() {
   const commodity = document.getElementById("commodity").value;
   const date = document.getElementById("priceDate").value;
 
-  // Basic validation
+  // Validation
   if (!state || !district || !market || !commodity || !date) {
     alert("Please fill all fields before prediction.");
     return;
   }
 
+  // Payload (MATCHES BACKEND EXACTLY)
   const payload = {
     "STATE": state,
     "District Name": district,
     "Market Name": market,
     "Commodity": commodity,
-    "Variety": "Other",
-    "Grade": "FAQ",
     "Price Date": date
   };
 
+  console.log("Sending payload:", payload);
+
   fetch("/predict", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json"
+    },
     body: JSON.stringify(payload)
   })
     .then(response => response.json())
     .then(data => {
+      if (data.error) {
+        alert(data.error); // show real backend error
+        return;
+      }
       displayResult(data);
     })
     .catch(error => {
@@ -73,7 +82,7 @@ function predictPrice() {
 }
 
 // ===============================
-// Display Result + Profit/Loss
+// DISPLAY RESULT + PROFIT LOGIC
 // ===============================
 function displayResult(data) {
   const resultDiv = document.getElementById("result");
@@ -83,10 +92,10 @@ function displayResult(data) {
   const minPrice = data.Estimated_Min_Price;
   const maxPrice = data.Estimated_Max_Price;
 
-  // Profit / Loss logic
+  // 🔥 PROFIT / LOSS LOGIC
   const range = maxPrice - minPrice;
   const position = modal - minPrice;
-  const score = position / range;
+  const score = range === 0 ? 0 : position / range;
 
   let statusText = "";
   let statusColor = "";
@@ -102,29 +111,31 @@ function displayResult(data) {
     statusColor = "#f9a825";
   }
 
-  // Render result
+  // ===============================
+  // RESULT UI
+  // ===============================
   resultDiv.innerHTML = `
     <h3>📊 Price Prediction Result</h3>
 
     <div class="result-item">
-      <b>Step 1:</b> Predicted Modal Price<br>
+      <b>Predicted Modal Price:</b><br>
       ₹ ${modal}
     </div>
 
     <div class="result-item">
-      <b>Step 2:</b> Estimated Minimum Price<br>
+      <b>Estimated Minimum Price:</b><br>
       ₹ ${minPrice}
     </div>
 
     <div class="result-item">
-      <b>Step 3:</b> Estimated Maximum Price<br>
+      <b>Estimated Maximum Price:</b><br>
       ₹ ${maxPrice}
     </div>
 
     <hr>
 
     <div class="result-item" style="font-weight:bold; color:${statusColor}">
-      Farmer Insight: ${statusText}
+      ${statusText}
     </div>
   `;
 }

@@ -11,17 +11,12 @@ app = Flask(__name__, static_folder="static", static_url_path="/static")
 # =========================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-
 # =========================
-# LOAD ONLY ENCODERS (LIGHTWEIGHT)
+# LOAD MODELS
 # =========================
 def load_encoders():
     return joblib.load(os.path.join(BASE_DIR, "../model/label_encoders.pkl"))
 
-
-# =========================
-# LOAD FULL MODEL (HEAVY)
-# =========================
 def load_model_bundle():
     model = joblib.load(os.path.join(BASE_DIR, "../model/rf_price_model1.pkl"))
     feature_schema = joblib.load(os.path.join(BASE_DIR, "../model/feature_schema.pkl"))
@@ -45,105 +40,84 @@ def ui():
 
 
 # =========================
-# DROPDOWN APIs (FAST)
+# DROPDOWN APIs
 # =========================
 
 @app.route("/states")
 def states():
-    try:
-        label_encoders = load_encoders()
-        return jsonify(label_encoders["STATE"].classes_.tolist())
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    label_encoders = load_encoders()
+    return jsonify(label_encoders["STATE"].classes_.tolist())
 
 
 @app.route("/districts")
 def districts():
-    try:
-        label_encoders = load_encoders()
-        return jsonify(label_encoders["District Name"].classes_.tolist())
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    label_encoders = load_encoders()
+    return jsonify(label_encoders["District Name"].classes_.tolist())
 
 
 @app.route("/markets")
 def markets():
-    try:
-        label_encoders = load_encoders()
-        return jsonify(label_encoders["Market Name"].classes_.tolist())
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    label_encoders = load_encoders()
+    return jsonify(label_encoders["Market Name"].classes_.tolist())
 
 
 @app.route("/commodities")
 def commodities():
-    try:
-        label_encoders = load_encoders()
-        return jsonify(label_encoders["Commodity"].classes_.tolist())
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    label_encoders = load_encoders()
+    return jsonify(label_encoders["Commodity"].classes_.tolist())
 
 
 # =========================
-# PREDICTION API
+# PREDICT API (FINAL STABLE)
 # =========================
 @app.route("/predict", methods=["POST"])
 def predict():
     try:
-        # Load models
         model, feature_schema, alpha, beta = load_model_bundle()
         label_encoders = load_encoders()
 
         data = request.json
-        print("Received JSON:", data)
+        print("Incoming:", data)
 
         # =========================
-        # DATE HANDLING (ROBUST)
+        # DATE
         # =========================
-        date_str = data.get("Price Date")
-
-        if not date_str:
-            return jsonify({"error": "Price Date is required"}), 400
-
-        parsed = None
-        for fmt in ("%Y-%m-%d", "%d-%m-%Y"):
-            try:
-                parsed = datetime.strptime(date_str, fmt)
-                break
-            except:
-                continue
-
-        if parsed is None:
-            return jsonify({"error": "Invalid date format. Use YYYY-MM-DD or DD-MM-YYYY"}), 400
-
-        data["day"], data["month"], data["year"] = parsed.day, parsed.month, parsed.year
+        d = datetime.strptime(data["Price Date"], "%Y-%m-%d")
+        data["day"], data["month"], data["year"] = d.day, d.month, d.year
         del data["Price Date"]
 
         # =========================
-        # SAFE ENCODING
+        # ADD DEFAULTS (IMPORTANT)
+        # =========================
+        data["Variety"] = "Other"
+        data["Grade"] = "FAQ"
+
+        # =========================
+        # ENCODING
         # =========================
         for col, enc in label_encoders.items():
             value = str(data.get(col, "")).strip()
 
-            if value in enc.classes_:
-                data[col] = int(enc.transform([value])[0])
-            else:
-                return jsonify({
-                    "error": f"Invalid value '{value}' for column '{col}'"
-                }), 400
+            if value not in enc.classes_:
+                return jsonify({"error": f"{value} not valid for {col}"})
 
-        print("Encoded data:", data)
+            data[col] = int(enc.transform([value])[0])
 
         # =========================
-        # FEATURE ALIGNMENT
+        # DATAFRAME ALIGNMENT
         # =========================
         X = pd.DataFrame([data])
 
-        # Ensure correct column order
-        X = X.reindex(columns=feature_schema, fill_value=0)
+        # Fill missing columns
+        for col in feature_schema:
+            if col not in X.columns:
+                X[col] = 0
+
+        # Correct order
+        X = X[feature_schema]
 
         # =========================
-        # PREDICTION
+        # PREDICT
         # =========================
         modal = float(model.predict(X)[0])
 
@@ -153,18 +127,18 @@ def predict():
             "Estimated_Max_Price": round(modal * beta, 2)
         }
 
-        print("Prediction result:", result)
+        print("Result:", result)
 
         return jsonify(result)
 
     except Exception as e:
-        print("ERROR in /predict:", str(e))
-        return jsonify({"error": str(e)}), 500
+        print("ERROR:", e)
+        return jsonify({"error": str(e)})
 
 
 # =========================
-# RUN SERVER (RENDER FIX)
+# RUN SERVER
 # =========================
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
