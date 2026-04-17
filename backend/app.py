@@ -23,7 +23,11 @@ alpha = joblib.load(os.path.join(BASE_DIR, "../model/alpha.pkl"))
 beta = joblib.load(os.path.join(BASE_DIR, "../model/beta.pkl"))
 
 print("Models loaded successfully!")
-
+print(type(model))
+print(type(feature_schema))
+print(type(label_encoders))
+print(type(alpha))
+print(type(beta))
 # =========================
 # ROUTES
 # =========================
